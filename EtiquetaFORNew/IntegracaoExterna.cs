@@ -180,8 +180,14 @@ namespace EtiquetaFORNew
         [JsonProperty("quantidade")]
         public int Quantidade { get; set; }
 
+        //[JsonProperty("gerar")]
+        //public bool Gerar { get; set; }
         [JsonProperty("gerar")]
-        public bool Gerar { get; set; }
+        public object Gerar { get; set; }
+        [JsonIgnore]
+        public bool DeveGerar => Gerar?.ToString().ToLower() == "true" ||
+                             Gerar?.ToString() == "1" ||
+                             Gerar?.ToString().ToUpper() == "S";
 
         // Campos opcionais (podem vir do Softshop ou não)
         [JsonProperty("preco")]

@@ -2591,33 +2591,55 @@ namespace EtiquetaFORNew
                 int importadosComFalha = 0;
                 List<string> erros = new List<string>();
 
+                //foreach (var itemImportado in _dadosImportacao.Itens)
+                //{
+                //    try
+                //    {
+                //        // Buscar produto completo no banco de dados
+                //        Produto produtoCompleto = BuscarProdutoParaImportacao(itemImportado);
+
+                //        if (produtoCompleto != null)
+                //        {
+                //            // Adicionar ao grid
+                //            AdicionarProdutoAoGrid(produtoCompleto, itemImportado);
+                //            importadosComSucesso++;
+                //        }
+                //        else
+                //        {
+                //            // Produto não encontrado - adicionar com dados básicos
+                //            AdicionarProdutoBasicoAoGrid(itemImportado);
+                //            importadosComSucesso++;
+                //        }
+                //    }
+                //    catch (Exception ex)
+                //    {
+                //        importadosComFalha++;
+                //        erros.Add($"Item {itemImportado.Codigo}/{itemImportado.Referencia}: {ex.Message}");
+                //    }
+                //}
                 foreach (var itemImportado in _dadosImportacao.Itens)
                 {
                     try
                     {
-                        // Buscar produto completo no banco de dados
-                        Produto produtoCompleto = BuscarProdutoParaImportacao(itemImportado);
+                        // Tenta buscar o produto no seu SQLite (tabela mercadorias)
+                        // para pegar o preço de venda atualizado
+                        Produto produtoCompleto = BuscarProdutoNoBancoLocal(itemImportado.Codigo);
 
                         if (produtoCompleto != null)
                         {
-                            // Adicionar ao grid
+                            // Se achou no banco, usamos o preço de lá
+                            produtoCompleto.Quantidade = itemImportado.Quantidade;
                             AdicionarProdutoAoGrid(produtoCompleto, itemImportado);
-                            importadosComSucesso++;
                         }
                         else
                         {
-                            // Produto não encontrado - adicionar com dados básicos
+                            // Se não achou, adiciona o básico (preço virá 0)
                             AdicionarProdutoBasicoAoGrid(itemImportado);
-                            importadosComSucesso++;
                         }
+                        importadosComSucesso++;
                     }
-                    catch (Exception ex)
-                    {
-                        importadosComFalha++;
-                        erros.Add($"Item {itemImportado.Codigo}/{itemImportado.Referencia}: {ex.Message}");
-                    }
+                    catch (Exception ex) { /* tratar erro */ }
                 }
-
                 // ========================================
                 // 🔹 FEEDBACK PARA O USUÁRIO
                 // ========================================
@@ -2682,34 +2704,40 @@ namespace EtiquetaFORNew
         }
         private Produto BuscarProdutoParaImportacao(ItemImportacao item)
         {
+            if (mercadorias == null || mercadorias.Rows.Count == 0) return null;
+
             try
             {
-                // Tentar buscar por código primeiro
-                if (!string.IsNullOrEmpty(item.Codigo))
+                // Define se busca por Código de Barras (Confecção) ou Código Normal
+                string campoBusca = isConfeccao ? "CodBarras_Grade" : "CodigoMercadoria";
+
+                // Faz o filtro na memória (rápido)
+                string filtro = $"{campoBusca} = '{item.Codigo.Replace("'", "''")}'";
+                DataRow[] rows = mercadorias.Select(filtro);
+
+                if (rows.Length > 0)
                 {
-                    var porCodigo = mercadorias?.AsEnumerable()
-                        .FirstOrDefault(r => r["Codigo"]?.ToString() == item.Codigo);
-
-                    if (porCodigo != null)
-                        return ConverterDataRowParaProduto(porCodigo);
+                    DataRow row = rows[0];
+                    return new Produto
+                    {
+                        Codigo = row["CodigoMercadoria"]?.ToString(),
+                        CodBarras_Grade = row["CodBarras_Grade"]?.ToString(),
+                        Nome = row["Mercadoria"]?.ToString(),
+                        // Puxa o preço do banco local se não houver no item importado
+                        Preco = row["PrecoVenda"] != DBNull.Value ? Convert.ToDecimal(row["PrecoVenda"]) : 0m,
+                        Quantidade = item.Quantidade, // Mantém a quantidade que veio do Softshop
+                        Tam = row["Tam"]?.ToString(),
+                        Cores = row["Cores"]?.ToString(),
+                        CodFabricante = row["Referencia"]?.ToString()
+                    };
                 }
-
-                // Se não encontrou, tentar por referência
-                if (!string.IsNullOrEmpty(item.Referencia))
-                {
-                    var porReferencia = mercadorias?.AsEnumerable()
-                        .FirstOrDefault(r => r["Referencia"]?.ToString() == item.Referencia);
-
-                    if (porReferencia != null)
-                        return ConverterDataRowParaProduto(porReferencia);
-                }
-
-                return null;
             }
-            catch
+            catch (Exception ex)
             {
-                return null;
+                Console.WriteLine("Erro ao buscar preço na importação: " + ex.Message);
             }
+
+            return null; // Se não achar, o código original usará o AdicionarProdutoBasicoAoGrid
         }
         private Produto ConverterDataRowParaProduto(DataRow row)
         {
@@ -2790,6 +2818,71 @@ namespace EtiquetaFORNew
             }
         }
 
+        private void ComplementarDadosProdutoImportado(Produto produto)
+        {
+            if (mercadorias == null) return;
+
+            try
+            {
+                // 1. Define qual campo usar para a busca (similar ao GetNomeCampoBusca)
+                string campoBusca = isConfeccao ? "CodBarras_Grade" : "CodigoMercadoria";
+                string filtro = $"{campoBusca} = '{produto.Codigo.Replace("'", "''")}'";
+
+                // 2. Busca na tabela que já está carregada em memória (mais rápido)
+                DataRow[] resultados = mercadorias.Select(filtro);
+                DataRow row = null;
+
+                if (resultados.Length > 0)
+                {
+                    row = resultados[0];
+                }
+                else
+                {
+                    // 3. Fallback: Se não achou na memória, tenta uma busca rápida no banco
+                    DataTable dt = LocalDatabaseManager.BuscarMercadorias(produto.Codigo, campoBusca, 1);
+                    if (dt != null && dt.Rows.Count > 0) row = dt.Rows[0];
+                }
+
+                // 4. Se encontrou o produto, preenche o preço e outros dados úteis
+                if (row != null)
+                {
+                    // Puxa o preço de venda (ou VendaA, VendaB conforme sua regra)
+                    decimal precoBD = row["PrecoVenda"] != DBNull.Value ? Convert.ToDecimal(row["PrecoVenda"]) : 0m;
+
+                    // Só sobrescreve se o preço original for 0
+                    if (produto.Preco == 0) produto.Preco = precoBD;
+
+                    // Aproveita para puxar outros dados que podem faltar na importação
+                    produto.Nome = row["Mercadoria"]?.ToString() ?? produto.Nome;
+                    produto.Tam = row["Tam"]?.ToString();
+                    produto.Cores = row["Cores"]?.ToString();
+                }
+            }
+            catch { /* Silencioso para não travar a importação principal */ }
+        }
+        private Produto BuscarProdutoNoBancoLocal(string codigo)
+        {
+            if (mercadorias == null) return null;
+
+            // Busca pelo código (ou código de barras se for confecção)
+            string campo = isConfeccao ? "CodBarras_Grade" : "CodigoMercadoria";
+            DataRow[] rows = mercadorias.Select($"{campo} = '{codigo.Replace("'", "''")}'");
+
+            if (rows.Length > 0)
+            {
+                var row = rows[0];
+                return new Produto
+                {
+                    Nome = row["Mercadoria"].ToString(),
+                    Codigo = row["CodigoMercadoria"].ToString(),
+                    // AQUI ESTÁ O PREÇO QUE VOCÊ PRECISA:
+                    Preco = row["PrecoVenda"] != DBNull.Value ? Convert.ToDecimal(row["PrecoVenda"]) : 0m,
+                    Tam = row.Table.Columns.Contains("Tam") ? row["Tam"].ToString() : "",
+                    Cores = row.Table.Columns.Contains("Cores") ? row["Cores"].ToString() : ""
+                };
+            }
+            return null;
+        }
 
         // ✅ MÉTODO CORRIGIDO - SUBSTITUIR NO FormPrincipal.cs A PARTIR DA LINHA 2487
 
