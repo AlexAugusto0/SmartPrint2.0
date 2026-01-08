@@ -349,18 +349,19 @@
             // 
             this.colNome.HeaderText = "Nome";
             this.colNome.Name = "colNome";
-            this.colNome.Width = 640;
+            this.colNome.Width = 500;
             // 
             // colCodigo
             // 
             this.colCodigo.HeaderText = "Código";
             this.colCodigo.Name = "colCodigo";
-            this.colCodigo.Width = 120;
+            this.colCodigo.Width = 100;
             // 
             // colPreco
             // 
             this.colPreco.HeaderText = "Preço";
             this.colPreco.Name = "colPreco";
+            this.colPreco.Width = 260;
             // 
             // colQuantidade
             // 

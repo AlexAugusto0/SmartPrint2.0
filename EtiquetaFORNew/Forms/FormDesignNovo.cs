@@ -707,7 +707,9 @@ namespace EtiquetaFORNew.Forms
                 "Garantia",
                 "Tam",
                 "Cores",
-                "CodBarras_Grade"
+                "CodBarras_Grade",
+                "PrecoOriginal",
+                "PrecoPromocional"
             });
             cmbCampos.SelectedIndexChanged += (s, e) => {
                 if (cmbCampos.SelectedItem != null)
@@ -1550,6 +1552,15 @@ namespace EtiquetaFORNew.Forms
                 case "Tam": return "";
                 case "Cores": return "";
                 case "CodBarras_Grade": return produto.CodBarras_Grade ?? "";
+                case "PrecoOriginal":
+                    return produto.PrecoOriginal.HasValue ?
+                           produto.PrecoOriginal.Value.ToString("C2") :
+                           produto.Preco.ToString("C2");
+
+                case "PrecoPromocional":
+                    return produto.PrecoPromocional.HasValue ?
+                           produto.PrecoPromocional.Value.ToString("C2") :
+                           produto.Preco.ToString("C2");
                 default: return "";
             }
         }

@@ -27,6 +27,9 @@ namespace EtiquetaFORNew
         public string Tam { get; set; }
         public string Cores { get; set; }
         public string CodBarras_Grade { get; set; }
+        public decimal? PrecoOriginal { get; set; }      // Preço antes da promoção
+        public decimal? PrecoPromocional { get; set; }   // Preço com desconto aplicado
+        public bool EmPromocao => PrecoOriginal.HasValue && PrecoPromocional.HasValue;
 
     }
 

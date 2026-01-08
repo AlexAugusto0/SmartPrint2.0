@@ -124,7 +124,9 @@ namespace EtiquetaFORNew.Data
                             ISNULL(cml.[Tam], '') as Tam,
                             ISNULL(cml.[Cores], '') as Cores,
                             ISNULL(cml.[CodBarras], '') as CodBarras_Grade,
-                            CAST(cml.[Código da Mercadoria] AS VARCHAR) + '-' + ISNULL(cml.[Tam], '') + '-' + ISNULL(cml.[Cores], '') as Registro
+                            CAST(cml.[Código da Mercadoria] AS VARCHAR) + '-' + ISNULL(cml.[Tam], '') + '-' + ISNULL(cml.[Cores], '') as Registro,
+                            pa.[Preço de Venda] as PrecoOriginal,      
+                           pa.[PrecoPromocao] as PrecoPromocional    
                         FROM Promocoes_Ativas pa
                         INNER JOIN [Cadastro de Mercadorias] cm 
                             ON pa.[Código da Mercadoria] = cm.[Código da Mercadoria]

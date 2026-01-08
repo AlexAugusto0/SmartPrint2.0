@@ -487,6 +487,14 @@ namespace EtiquetaFORNew
                     return produto.Cores ?? "";
                 case "CodBarras_Grade":
                     return produto.CodBarras_Grade ?? "";
+                case "PrecoOriginal":
+                    return produto.PrecoOriginal.HasValue ?
+                           produto.PrecoOriginal.Value.ToString("C2") :
+                           produto.Preco.ToString("C2");
+                case "PrecoPromocional":
+                    return produto.PrecoPromocional.HasValue ?
+                           produto.PrecoPromocional.Value.ToString("C2") :
+                           produto.Preco.ToString("C2");
 
 
                 default:

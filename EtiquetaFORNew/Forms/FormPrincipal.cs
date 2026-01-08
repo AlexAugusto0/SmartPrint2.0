@@ -2465,7 +2465,7 @@ namespace EtiquetaFORNew
                         isConfeccao: isConfeccao,
                         idPromocao: idPromocao // ⭐ NOVO parâmetro
                     );
-
+                    //AjustarLargurasGridParaPromocao();
                     Cursor = Cursors.Default;
 
                     // ========================================
@@ -3033,6 +3033,16 @@ namespace EtiquetaFORNew
                 produto.Tam = row["Tam"]?.ToString();
                 produto.Cores = row["Cores"]?.ToString();
 
+                if (row.Table.Columns.Contains("PrecoOriginal") && row["PrecoOriginal"] != DBNull.Value)
+                {
+                    produto.PrecoOriginal = Convert.ToDecimal(row["PrecoOriginal"]);
+                }
+
+                if (row.Table.Columns.Contains("PrecoPromocional") && row["PrecoPromocional"] != DBNull.Value)
+                {
+                    produto.PrecoPromocional = Convert.ToDecimal(row["PrecoPromocional"]);
+                }
+
                 // ⭐ CONFECÇÃO: Sobrescreve Tam e Cor se necessário (igual lançamento manual linhas 1614-1619)
                 if (isConfeccao && cmbTamanho != null && cmbCor != null)
                 {
@@ -3053,22 +3063,72 @@ namespace EtiquetaFORNew
             // ========================================
             // ⭐ ETAPA 4: ADICIONAR AO DATAGRIDVIEW (igual lançamento manual linhas 1695-1703)
             // ========================================
+            string precoExibicao;
+
+            if (produto.EmPromocao)
+            {
+                // Produto em promoção: mostra "DE R$ 100,00 | POR R$ 79,90"
+                precoExibicao = $"DE: {produto.PrecoOriginal:C2} POR: {produto.PrecoPromocional:C2}";
+            }
+            else
+            {
+                // Produto normal: mostra apenas o preço
+                precoExibicao = produto.Preco.ToString("C2");
+            }
+
+            // Adicionar ao grid com o preço formatado
             if (isConfeccao && dgvProdutos.Columns.Contains("colTam") && dgvProdutos.Columns.Contains("colCor"))
             {
                 dgvProdutos.Rows.Add(false, produto.Nome, produto.CodBarras_Grade,
-                    produto.Preco.ToString("C2"), produto.Quantidade,
+                    precoExibicao, produto.Quantidade,
                     produto.Tam ?? "", produto.Cores ?? "");
             }
             else
             {
                 dgvProdutos.Rows.Add(false, produto.Nome, produto.Codigo,
-                    produto.Preco.ToString("C2"), produto.Quantidade);
+                    precoExibicao, produto.Quantidade);
             }
 
 
 
 
         }
+        /// <summary>
+        /// Ajusta automaticamente as larguras das colunas quando há produtos em promoção
+        /// </summary>
+        //private void AjustarLargurasGridParaPromocao()
+        //{
+        //    // Verifica se algum produto no grid está em promoção
+        //    bool temPromocao = false;
+
+        //    foreach (DataGridViewRow row in dgvProdutos.Rows)
+        //    {
+        //        if (row.Cells["colPreco"].Value != null)
+        //        {
+        //            string preco = row.Cells["colPreco"].Value.ToString();
+        //            // Se tem " | " no preço, é promoção
+        //            if (preco.Contains(" | "))
+        //            {
+        //                temPromocao = true;
+        //                break;
+        //            }
+        //        }
+        //    }//}
+
+        //    // Ajusta as larguras conforme necessário
+        //    if (temPromocao)
+        //    {
+        //        // Modo promoção: mais espaço para preço
+        //        dgvProdutos.Columns["colNome"].Width = 480;
+        //        dgvProdutos.Columns["colPreco"].Width = 260;
+        //    }
+        //    else
+        //    {
+        //        // Modo normal: mais espaço para nome
+        //        dgvProdutos.Columns["colNome"].Width = 640;
+        //        dgvProdutos.Columns["colPreco"].Width = 100;
+        //    }
+        
         public FormPrincipal(DadosImportacao dadosImportacao) : this()
         {
             _dadosImportacao = dadosImportacao;
