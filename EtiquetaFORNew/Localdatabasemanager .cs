@@ -899,5 +899,9 @@ namespace EtiquetaFORNew.Data
                 return null;
             }
         }
+        public static DataTable ObterSubGruposPorGrupo(string grupo)
+        {
+            return LocalDatabaseManagerExtensions.ObterSubGruposPorGrupo(grupo);
+        }
     }
 }

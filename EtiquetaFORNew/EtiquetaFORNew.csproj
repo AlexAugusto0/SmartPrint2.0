@@ -215,9 +215,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CarregadorDados.cs" />
     <Compile Include="Classes.cs" />
     <Compile Include="ConfiguracaoManager.cs" />
     <Compile Include="Data\Funcoes.cs" />
+    <Compile Include="Data\Promocoesmanager.cs" />
     <Compile Include="Data\SmartPrintRepository.cs" />
     <Compile Include="FormNomeTemplate.cs">
       <SubType>Form</SubType>
@@ -303,6 +305,7 @@
     <Compile Include="Impressoramanager.cs" />
     <Compile Include="IntegracaoExterna.cs" />
     <Compile Include="Localdatabasemanager .cs" />
+    <Compile Include="LocalDatabaseManagerExtensions.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TemplateManager.cs" />

@@ -2398,61 +2398,168 @@ namespace EtiquetaFORNew
         {
             try
             {
+                // ========================================
+                // ETAPA 1: Abrir formulário de filtros
+                // ========================================
                 using (FormFiltrosCarregamento formFiltros = new FormFiltrosCarregamento())
                 {
-                    if (formFiltros.ShowDialog() == DialogResult.OK)
+                    if (formFiltros.ShowDialog() != DialogResult.OK)
                     {
-                        // Obter os filtros selecionados
-                        string grupo = formFiltros.GrupoSelecionado;
-                        string fabricante = formFiltros.FabricanteSelecionado;
-                        string fornecedor = formFiltros.FornecedorSelecionado;
+                        return; // Usuário cancelou
+                    }
 
-                        // Buscar mercadorias com os filtros
-                        DataTable mercadoriasFiltradas = LocalDatabaseManager.BuscarMercadoriasPorFiltros(
-                            grupo, fabricante, fornecedor, isConfeccao);
+                    // ========================================
+                    // ETAPA 2: Obter parâmetros do formulário
+                    // ========================================
+                    string tipo = formFiltros.TipoSelecionado;
+                    string grupo = formFiltros.GrupoSelecionado;
+                    string subGrupo = formFiltros.SubGrupoSelecionado;
+                    string fabricante = formFiltros.FabricanteSelecionado;
+                    string fornecedor = formFiltros.FornecedorSelecionado;
+                    string produto = formFiltros.ProdutoSelecionado;
+                    string documento = formFiltros.DocumentoInformado;
+                    DateTime? dataInicial = formFiltros.DataInicial;
+                    DateTime? dataFinal = formFiltros.DataFinal;
+                    int? idPromocao = formFiltros.PromocaoSelecionada; // ⭐ NOVO
 
-                        if (mercadoriasFiltradas != null && mercadoriasFiltradas.Rows.Count > 0)
+                    // ========================================
+                    // ETAPA 3: Verificar se há produtos no painel
+                    // ========================================
+                    if (produtos.Count > 0)
+                    {
+                        var resultado = MessageBox.Show(
+                            "Já existem produtos no painel de impressão.\n\n" +
+                            "Deseja limpar os produtos existentes antes de carregar novos?",
+                            "SmartPrint - Confirmar Limpeza",
+                            MessageBoxButtons.YesNoCancel,
+                            MessageBoxIcon.Question);
+
+                        if (resultado == DialogResult.Cancel)
                         {
-                            // Confirmar com o usuário
-                            string mensagem = $"Foram encontrados {mercadoriasFiltradas.Rows.Count} produtos.\n\n" +
-                                            $"Deseja adicionar todos ao painel de impressão?";
-
-                            if (MessageBox.Show(mensagem, "Confirmar Carregamento",
-                                MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                            {
-                                // Adicionar cada produto ao painel
-                                int adicionados = 0;
-                                foreach (DataRow row in mercadoriasFiltradas.Rows)
-                                {
-                                    try
-                                    {
-                                        AdicionarProdutoAoPanel(row);
-                                        adicionados++;
-                                    }
-                                    catch (Exception exRow)
-                                    {
-                                        System.Diagnostics.Debug.WriteLine(
-                                            $"Erro ao adicionar produto {row["Mercadoria"]}: {exRow.Message}");
-                                    }
-                                }
-
-                                MessageBox.Show($"{adicionados} produtos foram adicionados ao painel!",
-                                    "Carregamento Concluído",
-                                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-                            }
+                            return; // Usuário cancelou
                         }
-                        else
+
+                        if (resultado == DialogResult.Yes)
                         {
-                            MessageBox.Show("Nenhum produto encontrado com os filtros selecionados.",
-                                "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            // Limpar produtos existentes
+                            LimparTodosProdutos();
+                        }
+                        // Se DialogResult.No, continua e adiciona aos existentes
+                    }
+
+                    // ========================================
+                    // ETAPA 4: Buscar produtos conforme tipo
+                    // ========================================
+                    Cursor = Cursors.WaitCursor;
+
+                    DataTable mercadoriasFiltradas = CarregadorDados.CarregarProdutosPorTipo(
+                        tipo: tipo,
+                        documento: documento,
+                        dataInicial: dataInicial,
+                        dataFinal: dataFinal,
+                        grupo: grupo,
+                        subGrupo: subGrupo,
+                        fabricante: fabricante,
+                        fornecedor: fornecedor,
+                        produto: produto,
+                        isConfeccao: isConfeccao,
+                        idPromocao: idPromocao // ⭐ NOVO parâmetro
+                    );
+
+                    Cursor = Cursors.Default;
+
+                    // ========================================
+                    // ETAPA 5: Validar resultados
+                    // ========================================
+                    if (mercadoriasFiltradas == null || mercadoriasFiltradas.Rows.Count == 0)
+                    {
+                        MessageBox.Show(
+                            "Nenhum produto encontrado com os filtros selecionados.",
+                            "SmartPrint - Aviso",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    // ========================================
+                    // ETAPA 6: Confirmar carregamento
+                    // ========================================
+                    string mensagemTipo = ObterDescricaoTipo(tipo);
+                    string mensagem = $"📋 CARREGAMENTO: {mensagemTipo}\n\n" +
+                                    $"✓ Produtos encontrados: {mercadoriasFiltradas.Rows.Count:N0}\n\n";
+
+                    if (!string.IsNullOrEmpty(grupo))
+                        mensagem += $"• Grupo: {grupo}\n";
+                    if (!string.IsNullOrEmpty(subGrupo))
+                        mensagem += $"• SubGrupo: {subGrupo}\n";
+                    if (!string.IsNullOrEmpty(fabricante))
+                        mensagem += $"• Fabricante: {fabricante}\n";
+                    if (!string.IsNullOrEmpty(fornecedor))
+                        mensagem += $"• Fornecedor: {fornecedor}\n";
+                    if (!string.IsNullOrEmpty(documento))
+                        mensagem += $"• Documento: {documento}\n";
+                    if (dataInicial.HasValue && dataFinal.HasValue)
+                        mensagem += $"• Período: {dataInicial.Value:dd/MM/yyyy} a {dataFinal.Value:dd/MM/yyyy}\n";
+
+                    mensagem += "\n\nDeseja adicionar todos ao painel de impressão?";
+
+                    if (MessageBox.Show(mensagem, "SmartPrint - Confirmar Carregamento",
+                        MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                    {
+                        return;
+                    }
+
+                    // ========================================
+                    // ETAPA 7: Adicionar produtos ao painel
+                    // ========================================
+                    Cursor = Cursors.WaitCursor;
+
+                    int adicionados = 0;
+                    int erros = 0;
+
+                    foreach (DataRow row in mercadoriasFiltradas.Rows)
+                    {
+                        try
+                        {
+                            AdicionarProdutoAoPanel(row);
+                            adicionados++;
+                        }
+                        catch (Exception exRow)
+                        {
+                            erros++;
+                            System.Diagnostics.Debug.WriteLine(
+                                $"Erro ao adicionar produto {row["Mercadoria"]}: {exRow.Message}");
                         }
                     }
+
+                    Cursor = Cursors.Default;
+
+                    // ========================================
+                    // ETAPA 8: Exibir resultado final
+                    // ========================================
+                    string mensagemFinal = $"✓ Carregamento concluído!\n\n" +
+                                          $"Produtos adicionados: {adicionados:N0}\n";
+
+                    if (erros > 0)
+                    {
+                        mensagemFinal += $"⚠ Erros: {erros}\n";
+                    }
+
+                    mensagemFinal += $"\nTotal no painel: {produtos.Count:N0}";
+
+                    MessageBox.Show(mensagemFinal,
+                        "SmartPrint - Carregamento Concluído",
+                        MessageBoxButtons.OK,
+                        erros > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Erro ao carregar produtos: {ex.Message}",
-                    "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Cursor = Cursors.Default;
+                MessageBox.Show($"Erro ao carregar produtos:\n\n{ex.Message}",
+                    "SmartPrint - Erro",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
         /// <summary>
@@ -2843,6 +2950,30 @@ namespace EtiquetaFORNew
             }
             return null;
         }
+        private string ObterDescricaoTipo(string tipo)
+        {
+            switch (tipo.ToUpper())
+            {
+                case "AJUSTES":
+                    return "Ajustes de Estoque";
+                case "BALANÇOS":
+                    return "Balanços";
+                case "NOTAS ENTRADA":
+                    return "Notas Fiscais de Entrada";
+                case "PREÇOS ALTERADOS":
+                    return "Produtos com Preços Alterados";
+                case "PROMOÇÕES":
+                    return "Produtos em Promoção";
+                case "FILTROS MANUAIS":
+                default:
+                    return "Filtros Personalizados";
+            }
+        }
+        private void LimparTodosProdutos()
+        {
+            produtos.Clear();
+            dgvProdutos.Rows.Clear();
+        }
 
         // ✅ MÉTODO CORRIGIDO - SUBSTITUIR NO FormPrincipal.cs A PARTIR DA LINHA 2487
 
@@ -2933,6 +3064,7 @@ namespace EtiquetaFORNew
                 dgvProdutos.Rows.Add(false, produto.Nome, produto.Codigo,
                     produto.Preco.ToString("C2"), produto.Quantidade);
             }
+
 
 
 
