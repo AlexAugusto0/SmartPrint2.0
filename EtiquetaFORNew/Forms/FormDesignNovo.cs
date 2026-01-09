@@ -56,6 +56,10 @@ namespace EtiquetaFORNew.Forms
         private Panel panelToolbox;
         private RectangleF boundsIniciaisEmMM;
 
+        private bool rotacionando = false;
+        private float anguloInicial = 0f;
+        private PointF centroRotacao;
+
         // Controles de elementos e seleção
         private ElementoEtiqueta elementoSelecionado;
         private bool arrastando = false;
@@ -64,6 +68,7 @@ namespace EtiquetaFORNew.Forms
         private Rectangle boundsIniciais;
         private Point deltaArrasto;  // Delta do movimento (em pixels) para aplicar no final
         private int handleSelecionado = -1;
+        private int handleSobMouse = -1;  // Handle que está sob o cursor do mouse
 
         private List<ElementoEtiqueta> elementosSelecionados = new List<ElementoEtiqueta>();
         private bool selecionandoComRetangulo = false;
@@ -1418,6 +1423,20 @@ namespace EtiquetaFORNew.Forms
                         bounds.Y += deltaArrasto.Y;
                     }
 
+                    // ⭐ Aplicar rotação aos bounds e handles se elemento tiver rotação
+                    GraphicsState selectionState = null;
+                    if (elem.Rotacao != 0)
+                    {
+                        selectionState = g.Save();
+                        PointF centro = new PointF(
+                            bounds.X + bounds.Width / 2f,
+                            bounds.Y + bounds.Height / 2f
+                        );
+                        g.TranslateTransform(centro.X, centro.Y);
+                        g.RotateTransform(elem.Rotacao);
+                        g.TranslateTransform(-centro.X, -centro.Y);
+                    }
+
                     using (Pen penSelecao = new Pen(Color.Blue, 2))
                     {
                         penSelecao.DashStyle = DashStyle.Dash;
@@ -1428,6 +1447,12 @@ namespace EtiquetaFORNew.Forms
                     if (elementoSelecionado == elem && elementosSelecionados.Count == 0)
                     {
                         DesenharHandles(g, bounds);
+                    }
+
+                    // ⭐ Restaurar estado gráfico após desenhar seleção e handles
+                    if (selectionState != null)
+                    {
+                        g.Restore(selectionState);
                     }
                 }
             }
@@ -1441,6 +1466,25 @@ namespace EtiquetaFORNew.Forms
             {
                 bounds.X += deltaArrasto.X;
                 bounds.Y += deltaArrasto.Y;
+            }
+
+            GraphicsState state = null;
+            if (elem.Rotacao != 0)
+            {
+                state = g.Save();  // Salvar estado
+
+                // Transladar para o centro
+                PointF centro = new PointF(
+                    bounds.X + bounds.Width / 2f,
+                    bounds.Y + bounds.Height / 2f
+                );
+                g.TranslateTransform(centro.X, centro.Y);
+
+                // Rotacionar
+                g.RotateTransform(elem.Rotacao);
+
+                // Voltar
+                g.TranslateTransform(-centro.X, -centro.Y);
             }
 
             switch (elem.Tipo)
@@ -1498,6 +1542,10 @@ namespace EtiquetaFORNew.Forms
             }
 
             g.DrawRectangle(Pens.LightGray, bounds);
+            if (state != null)
+            {
+                g.Restore(state);
+            }
         }
 
         #endregion
@@ -1600,69 +1648,258 @@ namespace EtiquetaFORNew.Forms
             //}
         }
 
-        private void DesenharHandles(Graphics g, Rectangle bounds)
-        {
-            int handleSize = 8;
-            using (SolidBrush brush = new SolidBrush(Color.White))
-            using (Pen pen = new Pen(Color.Blue, 1))
-            {
-                Point[] handles = new Point[]
-                {
-                    new Point(bounds.Left, bounds.Top),
-                    new Point(bounds.Right, bounds.Top),
-                    new Point(bounds.Right, bounds.Bottom),
-                    new Point(bounds.Left, bounds.Bottom),
-                    new Point(bounds.Left + bounds.Width / 2, bounds.Top),
-                    new Point(bounds.Right, bounds.Top + bounds.Height / 2),
-                    new Point(bounds.Left + bounds.Width / 2, bounds.Bottom),
-                    new Point(bounds.Left, bounds.Top + bounds.Height / 2)
-                };
+        //private void DesenharHandles(Graphics g, Rectangle bounds)
+        //{
+        //    int handleSize = 8;
+        //    using (SolidBrush brush = new SolidBrush(Color.White))
+        //    using (Pen pen = new Pen(Color.Blue, 1))
+        //    {
+        //        Point[] handles = new Point[]
+        //        {
+        //            new Point(bounds.Left, bounds.Top),
+        //            new Point(bounds.Right, bounds.Top),
+        //            new Point(bounds.Right, bounds.Bottom),
+        //            new Point(bounds.Left, bounds.Bottom),
+        //            new Point(bounds.Left + bounds.Width / 2, bounds.Top),
+        //            new Point(bounds.Right, bounds.Top + bounds.Height / 2),
+        //            new Point(bounds.Left + bounds.Width / 2, bounds.Bottom),
+        //            new Point(bounds.Left, bounds.Top + bounds.Height / 2)
+        //        };
 
-                foreach (Point handle in handles)
+        //        foreach (Point handle in handles)
+        //        {
+        //            Rectangle handleRect = new Rectangle(
+        //                handle.X - handleSize / 2,
+        //                handle.Y - handleSize / 2,
+        //                handleSize,
+        //                handleSize
+        //            );
+        //            g.FillRectangle(brush, handleRect);
+        //            g.DrawRectangle(pen, handleRect);
+        //        }
+        //    }
+        //}
+
+        /// <summary>
+        /// Verifica se um ponto está dentro de um retângulo rotacionado
+        /// </summary>
+        private bool PontoEmRetanguloRotacionado(Point ponto, Rectangle bounds, float rotacao)
+        {
+            if (rotacao == 0)
+            {
+                return bounds.Contains(ponto);
+            }
+
+            // Centro do retângulo
+            PointF centro = new PointF(
+                bounds.X + bounds.Width / 2f,
+                bounds.Y + bounds.Height / 2f
+            );
+
+            // Transformar o ponto do mouse para o sistema de coordenadas rotacionado
+            // (rotação inversa em torno do centro)
+            double anguloRad = -rotacao * Math.PI / 180.0;
+            float dx = ponto.X - centro.X;
+            float dy = ponto.Y - centro.Y;
+
+            float pontoRotacionadoX = centro.X + (float)(dx * Math.Cos(anguloRad) - dy * Math.Sin(anguloRad));
+            float pontoRotacionadoY = centro.Y + (float)(dx * Math.Sin(anguloRad) + dy * Math.Cos(anguloRad));
+
+            // Verificar se o ponto rotacionado está dentro do bounds original
+            return bounds.Contains((int)pontoRotacionadoX, (int)pontoRotacionadoY);
+        }
+
+        /// <summary>
+        /// Desenha uma pequena seta curva para indicar rotação
+        /// </summary>
+        private void DesenharSetaRotacao(Graphics g, PointF centro, float raio, bool sentidoHorario, Color cor)
+        {
+            using (Pen pen = new Pen(cor, 1.5f))
+            {
+                pen.EndCap = System.Drawing.Drawing2D.LineCap.ArrowAnchor;
+
+                // Ângulos para a seta curva
+                float anguloInicio = sentidoHorario ? -45 : 45;
+                float anguloFim = sentidoHorario ? -135 : 135;
+
+                // Desenhar arco
+                RectangleF rect = new RectangleF(
+                    centro.X - raio,
+                    centro.Y - raio,
+                    raio * 2,
+                    raio * 2
+                );
+
+                using (System.Drawing.Drawing2D.GraphicsPath path = new System.Drawing.Drawing2D.GraphicsPath())
                 {
-                    Rectangle handleRect = new Rectangle(
-                        handle.X - handleSize / 2,
-                        handle.Y - handleSize / 2,
-                        handleSize,
-                        handleSize
-                    );
-                    g.FillRectangle(brush, handleRect);
-                    g.DrawRectangle(pen, handleRect);
+                    path.AddArc(rect, anguloInicio, anguloFim - anguloInicio);
+                    g.DrawPath(pen, path);
                 }
             }
         }
 
-        private int ObterHandleClicado(Point mouse, Rectangle bounds)
+        private void DesenharHandles(Graphics g, Rectangle bounds)
         {
-            // Mantém handleSize fixo em pixels, independente do zoom
-            int handleSize = 8;
-            int tolerance = 4;
+            const int handleSize = 6;
+            Color handleColor = Color.FromArgb(0, 120, 215);
+            Color rotateHandleColor = Color.Black; // ⭐ MUDADO: Preto para setas de rotação
 
-            Point[] handles = new Point[]
+            // Handles de redimensionamento existentes
+            Brush handleBrush = new SolidBrush(handleColor);
+
+            // 8 handles de canto/lado
+            Point[] handlePositions = new Point[]
             {
-                new Point(bounds.Left, bounds.Top),
-                new Point(bounds.Right, bounds.Top),
-                new Point(bounds.Right, bounds.Bottom),
-                new Point(bounds.Left, bounds.Bottom),
-                new Point(bounds.Left + bounds.Width / 2, bounds.Top),
-                new Point(bounds.Right, bounds.Top + bounds.Height / 2),
-                new Point(bounds.Left + bounds.Width / 2, bounds.Bottom),
-                new Point(bounds.Left, bounds.Top + bounds.Height / 2)
+                new Point(bounds.Left, bounds.Top),                           // 0: Superior esquerdo
+                new Point(bounds.Right, bounds.Top),                          // 1: Superior direito
+                new Point(bounds.Right, bounds.Bottom),                       // 2: Inferior direito
+                new Point(bounds.Left, bounds.Bottom),                        // 3: Inferior esquerdo
+                new Point(bounds.Left + bounds.Width / 2, bounds.Top),        // 4: Centro superior
+                new Point(bounds.Right, bounds.Top + bounds.Height / 2),      // 5: Centro direito
+                new Point(bounds.Left + bounds.Width / 2, bounds.Bottom),     // 6: Centro inferior
+                new Point(bounds.Left, bounds.Top + bounds.Height / 2)        // 7: Centro esquerdo
             };
 
-            for (int i = 0; i < handles.Length; i++)
+            // Desenhar handles de redimensionamento (0-7)
+            foreach (var pos in handlePositions)
+            {
+                g.FillRectangle(handleBrush,
+                    pos.X - handleSize / 2,
+                    pos.Y - handleSize / 2,
+                    handleSize,
+                    handleSize);
+                g.DrawRectangle(Pens.White,
+                    pos.X - handleSize / 2,
+                    pos.Y - handleSize / 2,
+                    handleSize,
+                    handleSize);
+            }
+
+            // ⭐ NOVO: Handles de rotação nos 4 cantos com setas curvas
+            // Só desenhar se o mouse estiver sobre um dos handles de rotação
+            if (handleSobMouse >= 8 && handleSobMouse <= 11)
+            {
+                // Posições dos cantos (fora do elemento)
+                int rotateOffset = 12; // ⭐ Distância dos cantos (mais próximo)
+                PointF[] rotatePositions = new PointF[]
+                {
+                    new PointF(bounds.Left - rotateOffset, bounds.Top - rotateOffset),           // 8: Canto superior esquerdo
+                    new PointF(bounds.Right + rotateOffset, bounds.Top - rotateOffset),          // 9: Canto superior direito
+                    new PointF(bounds.Right + rotateOffset, bounds.Bottom + rotateOffset),       // 10: Canto inferior direito
+                    new PointF(bounds.Left - rotateOffset, bounds.Bottom + rotateOffset)         // 11: Canto inferior esquerdo
+                };
+
+                // Sentidos das setas (para dar indicação visual de rotação)
+                bool[] sentidosHorarios = new bool[] { false, true, false, true };
+
+                // Desenhar apenas a seta do handle que está sob o mouse
+                int indexSeta = handleSobMouse - 8; // Converter 8-11 para 0-3
+                DesenharSetaRotacao(g, rotatePositions[indexSeta], 8f, sentidosHorarios[indexSeta], rotateHandleColor); // ⭐ AUMENTADO: raio de 8f
+            }
+
+            handleBrush.Dispose();
+        }
+
+        //private int ObterHandleClicado(Point mouse, Rectangle bounds)
+        //{
+        //    // Mantém handleSize fixo em pixels, independente do zoom
+        //    int handleSize = 8;
+        //    int tolerance = 4;
+
+        //    Point[] handles = new Point[]
+        //    {
+        //        new Point(bounds.Left, bounds.Top),
+        //        new Point(bounds.Right, bounds.Top),
+        //        new Point(bounds.Right, bounds.Bottom),
+        //        new Point(bounds.Left, bounds.Bottom),
+        //        new Point(bounds.Left + bounds.Width / 2, bounds.Top),
+        //        new Point(bounds.Right, bounds.Top + bounds.Height / 2),
+        //        new Point(bounds.Left + bounds.Width / 2, bounds.Bottom),
+        //        new Point(bounds.Left, bounds.Top + bounds.Height / 2)
+        //    };
+
+        //    for (int i = 0; i < handles.Length; i++)
+        //    {
+        //        Rectangle handleRect = new Rectangle(
+        //            handles[i].X - handleSize / 2 - tolerance,
+        //            handles[i].Y - handleSize / 2 - tolerance,
+        //            handleSize + tolerance * 2,
+        //            handleSize + tolerance * 2
+        //        );
+
+        //        if (handleRect.Contains(mouse))
+        //        {
+        //            return i;
+        //        }
+        //    }
+
+        //    return -1;
+        //}
+        private int ObterHandleClicado(Point mouse, Rectangle bounds, float rotacao = 0)
+        {
+            const int handleSize = 6;
+            const int tolerance = 3;
+
+            // ⭐ Se houver rotação, transformar o ponto do mouse para o sistema de coordenadas rotacionado
+            Point mouseTransformado = mouse;
+            if (rotacao != 0)
+            {
+                PointF centro = new PointF(bounds.X + bounds.Width / 2f, bounds.Y + bounds.Height / 2f);
+                double anguloRad = -rotacao * Math.PI / 180.0;
+                float dx = mouse.X - centro.X;
+                float dy = mouse.Y - centro.Y;
+                mouseTransformado = new Point(
+                    (int)(centro.X + dx * Math.Cos(anguloRad) - dy * Math.Sin(anguloRad)),
+                    (int)(centro.Y + dx * Math.Sin(anguloRad) + dy * Math.Cos(anguloRad))
+                );
+            }
+
+            // ⭐ Verificar handles de rotação (4 cantos externos) - índices 8, 9, 10, 11
+            int rotateOffset = 12; // ⭐ Distância dos cantos para detecção
+            int rotateClickRadius = 10; // Raio de detecção maior para facilitar o clique
+
+            PointF[] rotatePositions = new PointF[]
+            {
+                new PointF(bounds.Left - rotateOffset, bounds.Top - rotateOffset),           // 8: Superior esquerdo
+                new PointF(bounds.Right + rotateOffset, bounds.Top - rotateOffset),          // 9: Superior direito
+                new PointF(bounds.Right + rotateOffset, bounds.Bottom + rotateOffset),       // 10: Inferior direito
+                new PointF(bounds.Left - rotateOffset, bounds.Bottom + rotateOffset)         // 11: Inferior esquerdo
+            };
+
+            for (int i = 0; i < rotatePositions.Length; i++)
+            {
+                float dx = mouseTransformado.X - rotatePositions[i].X;
+                float dy = mouseTransformado.Y - rotatePositions[i].Y;
+                float distancia = (float)Math.Sqrt(dx * dx + dy * dy);
+
+                if (distancia <= rotateClickRadius)
+                    return 8 + i; // Retorna 8, 9, 10 ou 11
+            }
+
+            // Handles de redimensionamento (0-7)
+            Point[] handlePositions = new Point[]
+            {
+                new Point(bounds.Left, bounds.Top),                           // 0: Superior esquerdo
+                new Point(bounds.Right, bounds.Top),                          // 1: Superior direito
+                new Point(bounds.Right, bounds.Bottom),                       // 2: Inferior direito
+                new Point(bounds.Left, bounds.Bottom),                        // 3: Inferior esquerdo
+                new Point(bounds.Left + bounds.Width / 2, bounds.Top),        // 4: Centro superior
+                new Point(bounds.Right, bounds.Top + bounds.Height / 2),      // 5: Centro direito
+                new Point(bounds.Left + bounds.Width / 2, bounds.Bottom),     // 6: Centro inferior
+                new Point(bounds.Left, bounds.Top + bounds.Height / 2)        // 7: Centro esquerdo
+            };
+
+            for (int i = 0; i < handlePositions.Length; i++)
             {
                 Rectangle handleRect = new Rectangle(
-                    handles[i].X - handleSize / 2 - tolerance,
-                    handles[i].Y - handleSize / 2 - tolerance,
+                    handlePositions[i].X - handleSize / 2 - tolerance,
+                    handlePositions[i].Y - handleSize / 2 - tolerance,
                     handleSize + tolerance * 2,
                     handleSize + tolerance * 2
                 );
 
                 if (handleRect.Contains(mouse))
-                {
                     return i;
-                }
             }
 
             return -1;
@@ -1684,25 +1921,34 @@ namespace EtiquetaFORNew.Forms
             if (elementoSelecionado != null)
             {
                 Rectangle bounds = ConverterParaPixels(elementoSelecionado.Bounds, rectEtiqueta);
-                handleSelecionado = ObterHandleClicado(e.Location, bounds);
+                handleSelecionado = ObterHandleClicado(e.Location, bounds, elementoSelecionado.Rotacao);
 
-                //if (handleSelecionado >= 0)
-                //{
-                //    redimensionando = true;
-                //    pontoInicialMouse = e.Location;
-                //    boundsIniciais = bounds;
-                //    return;
-                //}
                 if (handleSelecionado >= 0)
                 {
-                    redimensionando = true;
-                    pontoInicialMouse = e.Location;
-                    boundsIniciais = bounds;
-                    boundsIniciaisEmMM = elementoSelecionado.Bounds; // ⭐ SALVAR EM MM
+                    if (handleSelecionado >= 8 && handleSelecionado <= 11) // ⭐ Handle de rotação
+                    {
+                        rotacionando = true;
+                        pontoInicialMouse = e.Location;
+                        anguloInicial = elementoSelecionado.Rotacao;
+
+                        // Calcular centro de rotação (centro do elemento)
+                        centroRotacao = new PointF(
+                            bounds.X + bounds.Width / 2f,
+                            bounds.Y + bounds.Height / 2f
+                        );
+                    }
+                    else // Handles de redimensionamento (0-7)
+                    {
+                        redimensionando = true;
+                        pontoInicialMouse = e.Location;
+                        boundsIniciais = bounds;
+                        boundsIniciaisEmMM = elementoSelecionado.Bounds;
+                    }
                     return;
                 }
 
-                if (bounds.Contains(e.Location))
+                // ⭐ Usar detecção considerando rotação
+                if (PontoEmRetanguloRotacionado(e.Location, bounds, elementoSelecionado.Rotacao))
                 {
                     arrastando = true;
                     pontoInicialMouse = e.Location;
@@ -1715,7 +1961,8 @@ namespace EtiquetaFORNew.Forms
             foreach (var elem in elementosSelecionados)
             {
                 Rectangle bounds = ConverterParaPixels(elem.Bounds, rectEtiqueta);
-                if (bounds.Contains(e.Location))
+                // ⭐ Usar detecção considerando rotação
+                if (PontoEmRetanguloRotacionado(e.Location, bounds, elem.Rotacao))
                 {
                     arrastando = true;
                     pontoInicialMouse = e.Location;
@@ -1728,7 +1975,8 @@ namespace EtiquetaFORNew.Forms
             for (int i = template.Elementos.Count - 1; i >= 0; i--)
             {
                 Rectangle bounds = ConverterParaPixels(template.Elementos[i].Bounds, rectEtiqueta);
-                if (bounds.Contains(e.Location))
+                // ⭐ Usar detecção considerando rotação
+                if (PontoEmRetanguloRotacionado(e.Location, bounds, template.Elementos[i].Rotacao))
                 {
                     elementoClicado = template.Elementos[i];
                     break;
@@ -1759,7 +2007,7 @@ namespace EtiquetaFORNew.Forms
 
                     Rectangle bounds = ConverterParaPixels(elementoClicado.Bounds, rectEtiqueta);
                     boundsIniciais = bounds;
-                    handleSelecionado = ObterHandleClicado(e.Location, bounds);
+                    handleSelecionado = ObterHandleClicado(e.Location, bounds, elementoSelecionado.Rotacao);
 
                     if (handleSelecionado >= 0)
                     {
@@ -1807,12 +2055,25 @@ namespace EtiquetaFORNew.Forms
             }
 
             // Redimensionando elemento único
-            // Redimensionando elemento único
             if (redimensionando && elementoSelecionado != null)
             {
-                // Calcular delta em MM (não em pixels)
-                float deltaXMM = (e.X - pontoInicialMouse.X) / (MM_PARA_PIXEL * zoom);
-                float deltaYMM = (e.Y - pontoInicialMouse.Y) / (MM_PARA_PIXEL * zoom);
+                // Calcular delta em pixels
+                float deltaXPixels = e.X - pontoInicialMouse.X;
+                float deltaYPixels = e.Y - pontoInicialMouse.Y;
+
+                // ⭐ Se o elemento estiver rotacionado, transformar o delta para o sistema de coordenadas rotacionado
+                if (elementoSelecionado.Rotacao != 0)
+                {
+                    double anguloRad = -elementoSelecionado.Rotacao * Math.PI / 180.0;
+                    float deltaXRotacionado = (float)(deltaXPixels * Math.Cos(anguloRad) - deltaYPixels * Math.Sin(anguloRad));
+                    float deltaYRotacionado = (float)(deltaXPixels * Math.Sin(anguloRad) + deltaYPixels * Math.Cos(anguloRad));
+                    deltaXPixels = deltaXRotacionado;
+                    deltaYPixels = deltaYRotacionado;
+                }
+
+                // Converter para MM
+                float deltaXMM = deltaXPixels / (MM_PARA_PIXEL * zoom);
+                float deltaYMM = deltaYPixels / (MM_PARA_PIXEL * zoom);
 
                 RectangleF newBoundsMM = boundsIniciaisEmMM; // ⭐ USAR BOUNDS EM MM
 
@@ -1881,6 +2142,13 @@ namespace EtiquetaFORNew.Forms
                             boundsIniciaisEmMM.Width - deltaXMM,
                             boundsIniciaisEmMM.Height);
                         break;
+
+                    case 8:  // ⭐ Handles de rotação (8-11: cantos externos)
+                    case 9:
+                    case 10:
+                    case 11:
+                        // Não fazer nada aqui - rotação é tratada em bloco separado
+                        break;
                 }
 
                 // Validar tamanho mínimo (em MM)
@@ -1903,16 +2171,53 @@ namespace EtiquetaFORNew.Forms
                 );
                 pbCanvas.Invalidate();
             }
+            // ⭐ ADICIONAR: Rotacionando elemento
+            // ⭐ ADICIONADO: Rotacionando elemento
+            else if (rotacionando && elementoSelecionado != null)
+            {
+                // Calcular ângulo entre centro e posição atual do mouse
+                float dx = e.X - centroRotacao.X;
+                float dy = e.Y - centroRotacao.Y;
+                float anguloAtual = (float)(Math.Atan2(dy, dx) * 180 / Math.PI);
+
+                // Calcular ângulo inicial (quando começou a rotacionar)
+                float dxInicial = pontoInicialMouse.X - centroRotacao.X;
+                float dyInicial = pontoInicialMouse.Y - centroRotacao.Y;
+                float anguloMouseInicial = (float)(Math.Atan2(dyInicial, dxInicial) * 180 / Math.PI);
+
+                // Calcular delta e aplicar
+                float deltaAngulo = anguloAtual - anguloMouseInicial;
+                float novaRotacao = anguloInicial + deltaAngulo;
+
+                // Normalizar para 0-360
+                while (novaRotacao < 0) novaRotacao += 360;
+                while (novaRotacao >= 360) novaRotacao -= 360;
+
+                elementoSelecionado.Rotacao = novaRotacao;
+                pbCanvas.Invalidate();
+            }
             // Atualizar cursor
             else
             {
                 if (elementoSelecionado != null)
                 {
                     Rectangle bounds = ConverterParaPixels(elementoSelecionado.Bounds, rectEtiqueta);
-                    int handle = ObterHandleClicado(e.Location, bounds);
+                    int handle = ObterHandleClicado(e.Location, bounds, elementoSelecionado.Rotacao);
 
-                    if (handle >= 0)
+                    // ⭐ Atualizar handleSobMouse e forçar redesenho se mudou
+                    if (handleSobMouse != handle)
                     {
+                        handleSobMouse = handle;
+                        pbCanvas.Invalidate(); // Redesenhar para mostrar/ocultar setas
+                    }
+
+                    if (handle >= 8 && handle <= 11) // ⭐ Cursor de rotação (handles 8-11)
+                    {
+                        pbCanvas.Cursor = Cursors.Hand;
+                    }
+                    else if (handle >= 0)
+                    {
+                        // Cursores de redimensionamento existentes
                         switch (handle)
                         {
                             case 0:
@@ -1931,16 +2236,28 @@ namespace EtiquetaFORNew.Forms
                             case 7:
                                 pbCanvas.Cursor = Cursors.SizeWE;
                                 break;
-                            default:
-                                pbCanvas.Cursor = Cursors.SizeAll;
-                                break;
                         }
                     }
-                    else if (bounds.Contains(e.Location))
+                    else if (PontoEmRetanguloRotacionado(e.Location, bounds, elementoSelecionado.Rotacao))
+                    {
                         pbCanvas.Cursor = Cursors.SizeAll;
+                    }
                     else
+                    {
                         pbCanvas.Cursor = Cursors.Default;
+                    }
                 }
+                else
+                {
+                    // ⭐ Resetar handleSobMouse quando não há elemento selecionado
+                    if (handleSobMouse != -1)
+                    {
+                        handleSobMouse = -1;
+                        pbCanvas.Invalidate();
+                    }
+                    pbCanvas.Cursor = Cursors.Cross;
+                }
+
             }
         }
 
@@ -2004,6 +2321,7 @@ namespace EtiquetaFORNew.Forms
 
             arrastando = false;
             redimensionando = false;
+            rotacionando = false;
             handleSelecionado = -1;
             pbCanvas.Cursor = Cursors.Default;
             pbCanvas.Invalidate(); // Garantir redesenho final

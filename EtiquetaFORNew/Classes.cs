@@ -57,6 +57,8 @@ namespace EtiquetaFORNew
         // ✅ NOVA PROPRIEDADE: Alinhamento do texto
         public StringAlignment Alinhamento { get; set; }
 
+        public float Rotacao { get; set; }
+
         // ✅ NOVA PROPRIEDADE: Nome da família da fonte escolhida
         public string NomeFonte { get; set; }
 
@@ -65,6 +67,7 @@ namespace EtiquetaFORNew
             Fonte = new Font("Arial", 10);
             Cor = Color.Black;
             Alinhamento = StringAlignment.Near;  // Padrão: esquerda
+            Rotacao = 0f;
         }
     }
 
