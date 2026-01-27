@@ -1,12 +1,13 @@
-﻿using System;
+﻿using BarcodeStandard;
+using SkiaSharp;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Printing;
-using System.Windows.Forms;
-using System.Linq; // Adicionado para uso potencial de LINQ
-using BarcodeStandard;
-using SkiaSharp;
 using System.IO;
+using System.Linq; // Adicionado para uso potencial de LINQ
+using System.Windows.Forms;
 
 namespace EtiquetaFORNew
 {
@@ -361,6 +362,26 @@ namespace EtiquetaFORNew
 
         private void DesenharElemento(Graphics g, ElementoEtiqueta elem, Produto produto, RectangleF bounds, float escala)
         {
+            // ⭐ APLICAR ROTAÇÃO se elemento tiver rotação
+            GraphicsState state = null;
+            if (elem.Rotacao != 0)
+            {
+                state = g.Save();  // Salvar estado
+
+                // Transladar para o centro
+                PointF centro = new PointF(
+                    bounds.X + bounds.Width / 2f,
+                    bounds.Y + bounds.Height / 2f
+                );
+                g.TranslateTransform(centro.X, centro.Y);
+
+                // Rotacionar
+                g.RotateTransform(elem.Rotacao);
+
+                // Voltar
+                g.TranslateTransform(-centro.X, -centro.Y);
+            }
+
             // ⭐ CORREÇÃO AQUI: Tamanho da Fonte.
             // Para impressão (escala=1.0f), usamos o tamanho original (em Points).
             // Para visualização, usamos a escala.
@@ -411,6 +432,12 @@ namespace EtiquetaFORNew
                         break;
                 }
             }
+
+            // ⭐ RESTAURAR estado gráfico após desenhar
+            if (state != null)
+            {
+                g.Restore(state);
+            }
         }
 
         // ⭐ NOVO MÉTODO: Obtém o valor correto para o código de barras
@@ -446,7 +473,7 @@ namespace EtiquetaFORNew
                 case "Codigo":
                     return produto.Codigo ?? "";
                 case "Preco":
-                    return produto.Preco.ToString("F2");
+                    return produto.Preco.ToString("C2");
                 case "Quantidade":
                     return produto.Quantidade.ToString();
                 case "CodFabricante":
@@ -460,17 +487,17 @@ namespace EtiquetaFORNew
                 case "CodBarras":
                     return produto.CodBarras ?? "";
                 case "PrecoVenda":
-                    return produto.PrecoVenda > 0 ? produto.PrecoVenda.ToString("F2") : produto.Preco.ToString("C2");
+                    return produto.PrecoVenda > 0 ? produto.PrecoVenda.ToString("C2") : produto.Preco.ToString("C2");
                 case "VendaA":
-                    return produto.VendaA > 0 ? produto.VendaA.ToString("F2") : "-";
+                    return produto.VendaA > 0 ? produto.VendaA.ToString("C2") : "-";
                 case "VendaB":
-                    return produto.VendaB > 0 ? produto.VendaB.ToString("F2") : "-";
+                    return produto.VendaB > 0 ? produto.VendaB.ToString("C2") : "-";
                 case "VendaC":
-                    return produto.VendaC > 0 ? produto.VendaC.ToString("F2") : "-";
+                    return produto.VendaC > 0 ? produto.VendaC.ToString("C2") : "-";
                 case "VendaD":
-                    return produto.VendaD > 0 ? produto.VendaD.ToString("F2") : "-";
+                    return produto.VendaD > 0 ? produto.VendaD.ToString("C2") : "-";
                 case "VendaE":
-                    return produto.VendaE > 0 ? produto.VendaE.ToString("F2") : "-";
+                    return produto.VendaE > 0 ? produto.VendaE.ToString("C2") : "-";
                 case "Fornecedor":
                     return produto.Fornecedor ?? "";
                 case "Fabricante":
@@ -487,14 +514,13 @@ namespace EtiquetaFORNew
                     return produto.Cores ?? "";
                 case "CodBarras_Grade":
                     return produto.CodBarras_Grade ?? "";
+
+                // ⭐ CAMPOS DE PROMOÇÃO
                 case "PrecoOriginal":
-                    return produto.PrecoOriginal.HasValue ?
-                           produto.PrecoOriginal.Value.ToString("F2") :
-                           produto.Preco.ToString("C2");
+                    return produto.PrecoOriginal.HasValue ? produto.PrecoOriginal.Value.ToString("C2") : "";
                 case "PrecoPromocional":
-                    return produto.PrecoPromocional.HasValue ?
-                           produto.PrecoPromocional.Value.ToString("F2") :
-                           produto.Preco.ToString("C2");
+                    return produto.PrecoPromocional.HasValue ? produto.PrecoPromocional.Value.ToString("C2") : "";
+
 
 
                 default:

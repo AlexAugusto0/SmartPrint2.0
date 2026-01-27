@@ -702,7 +702,7 @@ namespace EtiquetaFORNew
         private void dgvProdutos_CellEndEdit(object sender, DataGridViewCellEventArgs e)
         {
             // 1. Verificar se a edição ocorreu na coluna de Quantidade
-            if (dgvProdutos.Columns[e.ColumnIndex].Name == "Qtde") // Assumindo que o nome da sua coluna é "colQuantidade"
+            if (dgvProdutos.Columns[e.ColumnIndex].Name == "colQuantidade") // Assumindo que o nome da sua coluna é "colQuantidade"
             {
                 // 2. Tentar obter o novo valor da célula
                 object cellValue = dgvProdutos.Rows[e.RowIndex].Cells[e.ColumnIndex].Value;
@@ -774,49 +774,49 @@ namespace EtiquetaFORNew
 
 
 
-        protected override void OnPaintBackground(PaintEventArgs e)
+        //protected override void OnPaintBackground(PaintEventArgs e)
 
-        {
+        //{
 
-            base.OnPaintBackground(e);
-
-
-
-            using (LinearGradientBrush brush = new LinearGradientBrush(
-
-                this.ClientRectangle,
-
-                Color.White,
-
-                Color.White,
-
-                LinearGradientMode.Vertical))
-
-            {
-
-                ColorBlend blend = new ColorBlend();
-
-                blend.Positions = new float[] { 0.0f, 0.85f, 1.0f };
-
-                blend.Colors = new Color[] {
-
-                    Color.FromArgb(240, 235, 255),
-
-                    Color.FromArgb(240, 235, 255),
-
-                    Color.FromArgb(255, 255, 200, 50)
-
-                };
+        //    base.OnPaintBackground(e);
 
 
 
-                brush.InterpolationColors = blend;
+        //    using (LinearGradientBrush brush = new LinearGradientBrush(
 
-                e.Graphics.FillRectangle(brush, this.ClientRectangle);
+        //        this.ClientRectangle,
 
-            }
+        //        Color.White,
 
-        }
+        //        Color.White,
+
+        //        LinearGradientMode.Vertical))
+
+        //    {
+
+        //        ColorBlend blend = new ColorBlend();
+
+        //        blend.Positions = new float[] { 0.0f, 0.85f, 1.0f };
+
+        //        blend.Colors = new Color[] {
+
+        //            Color.FromArgb(240, 235, 255),
+
+        //            Color.FromArgb(240, 235, 255),
+
+        //            Color.FromArgb(255, 255, 200, 50)
+
+        //        };
+
+
+
+        //        brush.InterpolationColors = blend;
+
+        //        e.Graphics.FillRectangle(brush, this.ClientRectangle);
+
+        //    }
+
+        //}
 
 
 
@@ -1624,6 +1624,12 @@ namespace EtiquetaFORNew
                     produto.Tam = produtoAtualCompleto["Tam"]?.ToString();
                     produto.Cores = produtoAtualCompleto["Cores"]?.ToString();
 
+                    // ⭐ CAMPOS DE PROMOÇÃO
+                    if (produtoAtualCompleto.Table.Columns.Contains("PrecoOriginal") && produtoAtualCompleto["PrecoOriginal"] != DBNull.Value)
+                        produto.PrecoOriginal = Convert.ToDecimal(produtoAtualCompleto["PrecoOriginal"]);
+                    if (produtoAtualCompleto.Table.Columns.Contains("PrecoPromocional") && produtoAtualCompleto["PrecoPromocional"] != DBNull.Value)
+                        produto.PrecoPromocional = Convert.ToDecimal(produtoAtualCompleto["PrecoPromocional"]);
+
                     // ⭐ CONFECÇÃO: Sobrescreve Tam e Cor com os valores selecionados nas combos
                     if (isConfeccao && cmbTamanho != null && cmbCor != null)
                     {
@@ -1686,6 +1692,12 @@ namespace EtiquetaFORNew
                         produto.Garantia = row["Garantia"]?.ToString();
                         produto.Tam = row["Tam"]?.ToString();
                         produto.Cores = row["Cores"]?.ToString();
+
+                        // ⭐ CAMPOS DE PROMOÇÃO
+                        if (row.Table.Columns.Contains("PrecoOriginal") && row["PrecoOriginal"] != DBNull.Value)
+                            produto.PrecoOriginal = Convert.ToDecimal(row["PrecoOriginal"]);
+                        if (row.Table.Columns.Contains("PrecoPromocional") && row["PrecoPromocional"] != DBNull.Value)
+                            produto.PrecoPromocional = Convert.ToDecimal(row["PrecoPromocional"]);
 
                         // ⭐ CONFECÇÃO: Sobrescreve Tam e Cor com os valores selecionados nas combos
                         if (isConfeccao && cmbTamanho != null && cmbCor != null)
@@ -1754,7 +1766,7 @@ namespace EtiquetaFORNew
             cmbBuscaNome.Focus(); // ou o campo que você deseja que comece a próxima busca
 
         }
-            
+
 
         private void ComboBoxBusca_KeyDown(object sender, KeyEventArgs e)
         {
@@ -3128,7 +3140,7 @@ namespace EtiquetaFORNew
         //        dgvProdutos.Columns["colNome"].Width = 640;
         //        dgvProdutos.Columns["colPreco"].Width = 100;
         //    }
-        
+
         public FormPrincipal(DadosImportacao dadosImportacao) : this()
         {
             _dadosImportacao = dadosImportacao;
